@@ -1,7 +1,6 @@
 name: Build on Release created
 
 on:
-    workflow_dispatch:
     release:
         types:
             - created
@@ -20,7 +19,7 @@ jobs:
             - name: Checkout Code
               uses: actions/checkout@v4
               with:
-                  token: ${{ secrets.SACP_TOKEN }}
+                  token: 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
                   submodules: 'true'
 
             - name: Checkout submodules
@@ -32,7 +31,6 @@ jobs:
                   node-version: 16
 
             - run: npm install -g npm@^9
-            - run: npm list
             - run: npm install
 
             - run: npm run build
@@ -60,7 +58,7 @@ jobs:
             - name: Checkout Code
               uses: actions/checkout@v4
               with:
-                  token: ${{ secrets.SACP_TOKEN }}
+                  token: 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
                   submodules: 'true'
 
             - name: Checkout submodules
@@ -132,7 +130,7 @@ jobs:
             - name: Checkout Code
               uses: actions/checkout@v4
               with:
-                  token: ${{ secrets.SACP_TOKEN }}
+                  token: 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
                   submodules: 'true'
 
             - name: Checkout submodules
