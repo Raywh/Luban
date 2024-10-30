@@ -1,0 +1,189 @@
+name: Build on Release created
+
+on:
+    workflow_dispatch:
+    release:
+        types:
+            - created
+
+jobs:
+
+    build-windows:
+        name: Build Windows Packages
+
+        runs-on: windows-2022
+
+        steps:
+            - name: Prepare VC++ Runtime
+              run: choco install -y vcredist2017
+
+            - name: Checkout Code
+              uses: actions/checkout@v4
+              # with:
+              #     token: ${{ secrets.SACP_TOKEN }}
+              #     submodules: 'true'
+
+            - name: Checkout submodules
+              run: git submodule update --init --recursive
+
+            - name: Use Node.js 16
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 16
+
+            - run: npm install -g npm@^9
+            - run: npm list
+            - run: npm install
+
+            - run: npm run build
+
+            # ----------------------------------------------------------------
+            # Build Windows x64
+            # ----------------------------------------------------------------
+            - name: Build Windows x64 Binaries
+              run: npm run build:win-x64
+
+            - name: Release on Github
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      ./output/*.exe
+                      ./output/latest.yml
+
+    build-macos:
+        name: Build macOS Packages
+
+        # macos-11.7
+        runs-on: macos-latest
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+              # with:
+              #     token: ${{ secrets.SACP_TOKEN }}
+              #     submodules: 'true'
+
+            - name: Checkout submodules
+              run: git submodule update --init --recursive
+            
+            - name: Set up Python
+              uses: actions/setup-python@v2
+              with:
+                python-version: 3.11
+
+            - name: Install dependencies
+              run: |
+                python -m pip install --upgrade pip
+
+            - name: Use Node.js 16
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 16
+
+            # install setuptools to reintroduce distutils missing in Python 3.12
+            # https://github.com/nodejs/node-gyp/issues/2869
+            - run: pip install setuptools
+            - run: npm install -g npm@^9
+            - run: npm install
+
+            - run: npm run build
+
+            # ----------------------------------------------------------------
+            # Build macOS x64 & arm64
+            # ----------------------------------------------------------------
+            - name: Build macOS Binaries
+              run: npm run build:mac
+              env:
+                  CSC_LINK: ${{ secrets.CSC_LINK_MACOS }}
+                  CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD_MACOS }}
+                  APPLEID: ${{ secrets.APPLEID }}
+                  APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+
+            - name: Release on Github
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      ./output/*.zip
+                      ./output/*.dmg
+                      ./output/latest-mac.yml
+
+            - name: Init OSS
+              if: github.repository == 'Snapmaker/Luban'
+              uses: yizhoumo/setup-ossutil@v1
+              with:
+                  ossutil-version: '1.7.0'
+                  endpoint: ${{ secrets.OSS_ENDPOINT }}
+                  access-key-id: ${{ secrets.OSS_ACCESS_KEY_ID }}
+                  access-key-secret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+            - name: Upload Release macOS Installer OSS
+              if: github.repository == 'Snapmaker/Luban'
+              run: |
+                  ossutil cp -f ./output/ ${{secrets.OSS_UPDATE_PATH}}/ --include "*.dmg" -r
+                  ossutil cp -f ./output/ ${{secrets.OSS_UPDATE_PATH}}/ --include "*.zip" -r
+
+    build-linux:
+        name: Build Linux Packages
+
+        # Ubuntu 20.04: ubuntu-latest or ubuntu-20.04
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+              # with:
+              #     token: ${{ secrets.SACP_TOKEN }}
+              #     submodules: 'true'
+
+            - name: Checkout submodules
+              run: git submodule update --init --recursive
+
+            - name: Use Node.js 16
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 16
+
+            - run: npm install -g npm@^9
+            - run: npm install
+
+            - run: npm run build
+
+            # ----------------------------------------------------------------
+            # Build Linux x64
+            # ----------------------------------------------------------------
+            - name: Build Linux x64 Binaries
+              run: npm run build:linux-x64
+
+            - run: |
+                  PRODUCT_NAME="Snapmaker Luban"
+                  PACKAGE_NAME="snapmaker-luban"
+                  PACKAGE_VERSION=`node -e "console.log(require('./src/package.json').version)"`
+                  RELEASE=${PACKAGE_NAME}-${PACKAGE_VERSION}
+
+                  ln -sf ./output/linux-unpacked "${RELEASE}-linux-x64"
+                  tar zcfh "./output/${RELEASE}-linux-x64.tar.gz" "${RELEASE}-linux-x64"
+                  rm -f "${RELEASE}-linux-x64"
+
+            - name: Release on Github
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      ./output/*.deb
+                      ./output/*.rpm
+                      ./output/*.tar.gz
+
+            - name: Init OSS
+              if: github.repository == 'Snapmaker/Luban'
+              uses: yizhoumo/setup-ossutil@v1
+              with:
+                  ossutil-version: '1.7.0'
+                  endpoint: ${{ secrets.OSS_ENDPOINT }}
+                  access-key-id: ${{ secrets.OSS_ACCESS_KEY_ID }}
+                  access-key-secret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+            - name: Upload Release linux Installer To OSS
+              if: github.repository == 'Snapmaker/Luban'
+              run: |
+                  ossutil cp -f ./output/ ${{secrets.OSS_UPDATE_PATH}}/ --include "*.deb" -r
+                  ossutil cp -f ./output/ ${{secrets.OSS_UPDATE_PATH}}/ --include "*.rpm" -r
+                  ossutil cp -f ./output/ ${{secrets.OSS_UPDATE_PATH}}/ --include "*.tar.gz" -r
